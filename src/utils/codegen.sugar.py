@@ -691,7 +691,7 @@ def gen_fmt_Cast(e, format_as_value=True, expand_parameters=False, needs_variabl
         #Cast from bool to bit<1>
         return f'({fe} ? 1 : 0)'
     elif et.node_type == 'Type_Bits' and edt.node_type == 'Type_Bits':
-        breakpoint()
+        #breakpoint()
         if et.isSigned == edt.isSigned:
             if not et.isSigned:                       #Cast from bit<w> to bit<v>
                 if et.size > edt.size:

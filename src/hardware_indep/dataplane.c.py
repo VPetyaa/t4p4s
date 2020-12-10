@@ -430,6 +430,43 @@ for ctl in hlir.controls:
         #[ // update_packet(pd); // we need to update the packet prior to calculating the new checksum
 #} }
 
+#[ void process_packet_begin(STDPARAMS)
+#{ {
+it=0
+for ctl in hlir.controls:
+    if len(ctl.body.components) == 0:
+        #[ // skipping empty control ${ctl.name}
+    else:
+        #[ control_${ctl.name}(STDPARAMS_IN);
+
+    if hlir.news.model == 'V1Switch' and it==1:
+        #[ transfer_to_egress(pd);
+    it = it+1
+    if ctl.name == 'egress':
+        break;
+#} }
+
+#[ void process_packet_end(STDPARAMS)
+#{ {
+it=0
+after_egress = False
+for ctl in hlir.controls:
+    if len(ctl.body.components) == 0:
+        #[ // skipping empty control ${ctl.name}
+    else:
+        #[ control_${ctl.name}(STDPARAMS_IN);
+
+    if hlir.news.model == 'V1Switch' and it==1:
+        #[ transfer_to_egress(pd);
+    it = it+1
+    if ctl.name == 'egress':
+        after_egress = True
+    if after_egress:
+        if ctl.name == 'egress':
+            #[ update_packet(pd); // we need to update the packet prior to calculating the new checksum        
+#} }
+
+
 ################################################################################
 
 longest_hdr_name_len = max({len(h.name) for h in hlir.header_instances if not h.urtype.is_metadata})
@@ -557,6 +594,13 @@ pkt_name_indent = " " * longest_hdr_name_len
 #}     }
 #} }
 
+#[ static void set_metadata_inport(packet_descriptor_t* pd, uint32_t inport)
+#[ {
+#[     int res32; // needed for the macro
+#[     MODIFY_INT32_INT32_BITS_PACKET(pd, HDR(all_metadatas), INGRESS_META_FLD, inport);
+#[ }
+
+
 #[ void handle_packet(uint32_t portid, STDPARAMS)
 #{ {
 #[     int value32;
@@ -578,3 +622,38 @@ pkt_name_indent = " " * longest_hdr_name_len
 #[
 #[     emit_packet(STDPARAMS_IN);
 #} }
+
+#[ void handle_packet_begin(STDPARAMS, uint32_t portid, uint32_t depth, uint32_t qlatency, uint32_t current_time, uint32_t avg_qdepth)
+#{ {
+#[     int value32;
+#[     int res32;
+#[
+#[     reset_headers(SHORT_STDPARAMS_IN);
+#[     set_metadata_inport(pd, portid);
+#[     MODIFY_INT32_INT32_BITS_PACKET(pd, HDR(all_metadatas), FLD(all_metadatas,qdepth), depth);
+#[     MODIFY_INT32_INT32_BITS_PACKET(pd, HDR(all_metadatas), FLD(all_metadatas,qlatency), qlatency);
+#[     MODIFY_INT32_INT32_BITS_PACKET(pd, HDR(all_metadatas), FLD(all_metadatas,timestamp), current_time);
+#[     MODIFY_INT32_INT32_BITS_PACKET(pd, HDR(all_metadatas), FLD(all_metadatas,avg_qdepth), avg_qdepth);
+#[
+#[     dbg_bytes(pd->data, rte_pktmbuf_pkt_len(pd->wrapper), "Handling packet (port %" PRIu32 ", $${}{%02d} bytes)  : ", EXTRACT_INGRESSPORT(pd), rte_pktmbuf_pkt_len(pd->wrapper));
+#[
+#[     pd->parsed_length = 0;
+#[     parse_packet(STDPARAMS_IN);
+#[     pd->payload_length = rte_pktmbuf_pkt_len(pd->wrapper) - pd->parsed_length;
+#[
+#[     emit_addr = pd->data;
+#[     pd->emit_hdrinst_count = 0;
+#[     pd->is_emit_reordering = false;
+#[
+#[     process_packet_begin(STDPARAMS_IN);
+#[
+#} }
+
+#[ void handle_packet_end(STDPARAMS)
+#{ {
+#[     process_packet_end(STDPARAMS_IN);
+#[
+#[     emit_packet(STDPARAMS_IN);
+#} }
+
+

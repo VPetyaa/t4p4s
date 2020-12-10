@@ -8,6 +8,10 @@
 #include "dataplane_lookup.h"  // lookup_table_t
 #include "parser.h"     // parser_state_t
 #include "common.h"     // NB_TABLES
+#include <rte_ring.h>
+#include <rte_string_fns.h>
+
+#include "dataplane.h"
 
 //=============================================================================
 // Unifying renamed types and constants
@@ -78,6 +82,15 @@ struct socket_state {
     int              active_replica [NB_TABLES];
 };
 
+struct lcore_ring {
+    struct rte_ring *ring;
+    uint32_t pkt_count;
+    uint32_t byte_count;
+    packet_descriptor_t* pd_pool; //[PD_POOL_SIZE];
+    uint32_t* pd_idx;
+};
+
+
 struct lcore_hardware_conf {
     // message queues
     uint64_t tx_tsc;
@@ -90,4 +103,6 @@ struct lcore_hardware_conf {
 struct lcore_conf {
     struct lcore_hardware_conf hw;
     struct lcore_state         state;
+    struct lcore_ring*         txring;
+    struct lcore_ring          rxring;    
 } __rte_cache_aligned;

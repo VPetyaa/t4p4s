@@ -140,6 +140,51 @@ int init_lcore_rx_queues()
     return 0;
 }
 
+int init_lcore_rings()
+{
+    unsigned socket_io;
+    struct rte_ring *ring = NULL;
+    printf("nb_lcore: %d\n", nb_lcore_params);
+    for (uint16_t i = 0; i < nb_lcore_params; ++i) {
+        uint8_t lcore = lcore_params[i].lcore_id;
+        printf("lcore_rings_init -- %d\n",lcore);
+        socket_io = rte_lcore_to_socket_id(lcore);
+        if (nb_lcore_params==2 && lcore==0) {
+                printf("NB LCORE: %d\n", nb_lcore_params);
+                if (ring==NULL)
+                     ring = rte_ring_create("test", 1024*16, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                lcore_conf[lcore].rxring.ring = ring;
+                //rte_atomic32_init( &(lcore_conf[lcore].rxring.pkt_count) );
+                //rte_atomic32_init( &(lcore_conf[lcore].rxring.byte_count) );
+                lcore_conf[lcore].rxring.pkt_count = 0;
+                lcore_conf[lcore].rxring.byte_count = 0;
+                lcore_conf[lcore].rxring.pd_idx = 0;
+                lcore_conf[1].txring = &(lcore_conf[0].rxring);
+        } else if (nb_lcore_params==4) {
+                if (lcore==0) ring = rte_ring_create("test0", 1024, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                if (lcore==2) ring = rte_ring_create("test2", 1024, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                if (lcore%2==0) {
+                        lcore_conf[lcore].rxring.ring = ring;
+                        //rte_atomic32_init( &(lcore_conf[lcore].rxring.pkt_count) );
+                        //rte_atomic32_init( &(lcore_conf[lcore].rxring.byte_count) );
+                        lcore_conf[lcore].rxring.pkt_count = 0;
+                        lcore_conf[lcore].rxring.byte_count = 0;
+                        lcore_conf[lcore].rxring.pd_idx = 0;
+                } else {
+                        lcore_conf[lcore].rxring.ring = 0;
+                }
+                if (lcore%2==1) {
+                        lcore_conf[lcore].txring = &(lcore_conf[lcore-1].rxring);
+                } else {
+                        lcore_conf[lcore].txring = 0;
+                }
+        }
+
+    }
+    return 0;
+}
+
+
 void init_mbuf_pool(int socketid)
 {
     if (pktmbuf_pool[socketid] != NULL) return;
@@ -185,6 +230,26 @@ bool init_tx_on_lcore(unsigned lcore_id, uint8_t portid, uint16_t queueid)
     if (ret < 0)
         rte_exit(EXIT_FAILURE, "rte_eth_tx_queue_setup: err=%d, "
                  "port=%d\n", ret, portid);
+
+/*    if (portid==1) {
+        ret = 0; //rte_eth_set_queue_rate_limit(portid, queueid, 5000);
+	if (ret < 0) {
+		switch (ret) {
+			case EIO: printf("EIO\n");
+				  break;
+			case ENOTSUP: printf("ENOTSUP\n");
+                                  break;
+			case ENODEV: printf("ENODEV\n");
+                                  break;
+			case EINVAL: printf("EINVAL\n");
+                                  break;
+			default: printf("UNK\n");
+                                  break;
+		}
+	        rte_exit(EXIT_FAILURE, "rte_eth_set_queue_rate_limit: err=%d, "
+                 "port=%d\n", ret, portid);
+ 	}
+    }*/
 
     struct lcore_conf* qconf = &lcore_conf[lcore_id];
     qconf->hw.tx_queue_id[portid] = queueid;
@@ -323,7 +388,33 @@ void dpdk_init_nic()
 
         debug("Entering promiscous mode on port %d\n", portid);
         rte_eth_promiscuous_enable(portid);
+
+/*	if (portid==1) {
+		uint16_t queueid = 0;
+    		for (unsigned lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++, queueid++) {
+        		ret = rte_eth_set_queue_rate_limit(portid, queueid, 5000);
+		        if (ret < 0) {
+                		switch (ret) {
+		                        case EIO: printf("EIO\n");
+                		                  break;
+		                        case ENOTSUP: printf("ENOTSUP\n");
+                		                  break;
+		                        case ENODEV: printf("ENODEV\n");
+                		                  break;
+		                        case EINVAL: printf("EINVAL\n");
+                		                  break;
+		                        default: printf("UNK\n");
+                		                  break;
+                		}
+		                rte_exit(EXIT_FAILURE, "rte_eth_set_queue_rate_limit: err=%d, "
+                			 "port=%d\n", ret, portid);
+        		}
+
+    		}
+	}*/
+
     }
 
     print_all_ports_link_status(nb_ports, enabled_port_mask);
+    init_lcore_rings();
 }
