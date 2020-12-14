@@ -635,7 +635,7 @@ pkt_name_indent = " " * longest_hdr_name_len
 #[     MODIFY_INT32_INT32_BITS_PACKET(pd, HDR(all_metadatas), FLD(all_metadatas,timestamp), current_time);
 #[     MODIFY_INT32_INT32_BITS_PACKET(pd, HDR(all_metadatas), FLD(all_metadatas,avg_qdepth), avg_qdepth);
 #[
-#[     dbg_bytes(pd->data, rte_pktmbuf_pkt_len(pd->wrapper), "Handling packet (port %" PRIu32 ", $${}{%02d} bytes)  : ", EXTRACT_INGRESSPORT(pd), rte_pktmbuf_pkt_len(pd->wrapper));
+#[     dbg_bytes(pd->data, rte_pktmbuf_pkt_len(pd->wrapper), "Handling packet (port %" PRIu32 ", $${}{%02d} bytes)  : ", portid, rte_pktmbuf_pkt_len(pd->wrapper));
 #[
 #[     pd->parsed_length = 0;
 #[     parse_packet(STDPARAMS_IN);

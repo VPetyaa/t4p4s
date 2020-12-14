@@ -159,7 +159,7 @@ int process_pkt(struct rte_mbuf* m, struct lcore_data* lcdata, unsigned queue_id
    qlatency = qsize * 8 / 5000;
    handle_packet_begin(tmp_pd, lcdata->conf->state.tables, &(lcdata->conf->state.parser_state), 0, depth, qlatency, current_time, avg_qdepth/1000);
    if (unlikely(GET_INT32_AUTO_PACKET(tmp_pd, HDR(all_metadatas), EGRESS_META_FLD) == EGRESS_DROP_VALUE)) { //tmp_pd->dropped)) {
-       //debug(" :::: Dropping packet after ingress control\n");
+       debug(" :::: Dropping packet after ingress control\n");
        //++ingressdropcnt;
        return -1;
     }
@@ -199,9 +199,9 @@ void do_single_rx2(struct lcore_data* lcdata, packet_descriptor_t* pd, unsigned 
                         qlatency = 1000 * depth / BNCAP; // 1500 * 8 * depth / 6000; // in us; BN = 1 MPPS
                         debug("EGRESS:: %d\n", egress_port);
                         //reset_headers(tmp_pd, 0);
-                        //MODIFY_INT32_INT32_BITS_PACKET(tmp_pd, header_instance_standard_metadata, field_standard_metadata_t_qdepth, depth);
-                        //MODIFY_INT32_INT32_BITS_PACKET(tmp_pd, header_instance_standard_metadata, field_standard_metadata_t_qlatency, qlatency);
-                        //MODIFY_INT32_INT32_BITS_PACKET(tmp_pd, header_instance_standard_metadata, field_standard_metadata_t_timestamp, current_time);
+                        //MODIFY_INT32_INT32_BITS_PACKET(tmp_pd, HDR(all_metadatas), FLD(all_metadatas, qdepth), depth);
+                        //MODIFY_INT32_INT32_BITS_PACKET(tmp_pd, HDR(all_metadatas), FLD(all_metadatas, qlatency), qlatency);
+                        //MODIFY_INT32_INT32_BITS_PACKET(tmp_pd, HDR(all_metadatas), FLD(all_metadatas, timestamp), current_time);
 
                         if (depth > dmax) dmax = depth;
                         //if (global_smem.prob_reg_0[0].value > pvalmax) pvalmax = global_smem.prob_reg_0[0].value;
@@ -373,13 +373,14 @@ void do_forward2(LCPARAMS) {
                 rte_prefetch0(rte_pktmbuf_mtod(m, void *));
                 ma[0] = m;
                 if (process_pkt(m, lcdata, queue_idx)==0) {
-                //      printf("packet arrived %d\n", m->pkt_len);
+                        //printf("packet arrived %d\n", m->pkt_len);
                         rte_spinlock_lock(&spinlock);
                         ret = rte_ring_sp_enqueue_burst( lcdata->conf->rxring.ring,
                                                 (void **) ma, //lcdata->pkts_burst[pkt_idx],
                                                 1, NULL);
                         if (ret) {
                                 qsize += m->pkt_len;
+                                //printf("qsize %d\n", qsize);
                         }
                         rte_spinlock_unlock(&spinlock);
                         if (!ret) {

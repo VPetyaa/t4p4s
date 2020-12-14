@@ -36,34 +36,6 @@ uint16_t t4p4s_nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 #endif
 
 struct rte_eth_conf port_conf = {
-    .rxmode = {
-        .mq_mode = ETH_MQ_RX_RSS,
-        .max_rx_pkt_len = RTE_ETH_MAX_LEN,
-        .split_hdr_size = 0,
-#if RTE_VERSION >= RTE_VERSION_NUM(18,11,0,0)
-	#ifndef T4P4S_RTE_OFFLOADS
-	#define T4P4S_RTE_OFFLOADS DEV_RX_OFFLOAD_CHECKSUM
-	#endif
-        .offloads = T4P4S_RTE_OFFLOADS,
-#elif RTE_VERSION >= RTE_VERSION_NUM(18,05,0,0)
-        .offloads = DEV_RX_OFFLOAD_CRC_STRIP | DEV_RX_OFFLOAD_CHECKSUM,
-#else
-        .header_split   = 0, // Header Split disabled
-        .hw_ip_checksum = 1, // IP checksum offload enabled
-        .hw_vlan_filter = 0, // VLAN filtering disabled
-        .jumbo_frame    = 0, // Jumbo Frame Support disabled
-        .hw_strip_crc   = 1, // CRC stripped by hardware
-#endif
-    },
-    .rx_adv_conf = {
-        .rss_conf = {
-            .rss_key = NULL,
-            .rss_hf = T4P4S_RTE_RSS_HF,
-        },
-    },
-    .txmode = {
-        .mq_mode = ETH_MQ_TX_NONE,
-    },
 };
 
 //=============================================================================
@@ -267,7 +239,7 @@ void dpdk_init_port(uint8_t nb_ports, uint32_t nb_lcores, uint8_t portid) {
     fflush(stdout);
 
     uint16_t nb_rx_queue = get_port_n_rx_queues(portid);
-    uint32_t n_tx_queue = min(nb_lcores, MAX_TX_QUEUE_PER_PORT);
+    uint32_t n_tx_queue = 1;//min(nb_lcores, MAX_TX_QUEUE_PER_PORT);
 
     debug(" :::: Creating queues: nb_rxq=%d nb_txq=%u\n",
           nb_rx_queue, (unsigned)n_tx_queue );
@@ -283,7 +255,8 @@ void dpdk_init_port(uint8_t nb_ports, uint32_t nb_lcores, uint8_t portid) {
     uint16_t queueid = 0;
     for (unsigned lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
         if (init_tx_on_lcore(lcore_id, portid, queueid))
-            ++queueid;
+            //++queueid;
+            queueid=queueid;
     }
 
     debug("\n");
