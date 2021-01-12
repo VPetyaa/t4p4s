@@ -1114,7 +1114,7 @@ def gen_format_expr(e, format_as_value=True, expand_parameters=False, needs_vari
                 mi = name[9:].split("X")[0]
                 ma = name[9:].split("X")[1]
                 ma = ma.split("_")[0]
-                #[ rand()%((${mi}+1)-${ma}) + ${mi}
+                #[ rand()%((${ma}+1)-${mi}) + ${mi}
             else:
                 #[ local_vars->${name}
         elif is_abs:

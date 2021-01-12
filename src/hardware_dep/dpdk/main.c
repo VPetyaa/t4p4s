@@ -20,12 +20,13 @@ extern void handle_packet_begin(packet_descriptor_t* pd, lookup_table_t** tables
 extern void handle_packet_end(packet_descriptor_t* pd, lookup_table_t** tables, parser_state_t* pstate);
 
 
-#define PD_POOL_SIZE 1024*8
+#define PD_POOL_SIZE 1024*8*8
 //#define LCORE_NUM 4
 //packet_descriptor_t pd_pool[PD_POOL_SIZE];
 //int idx_pd = 0;
 
 
+static int first_run = 1;
 volatile int qsize = 0;
 uint32_t qlatency = 0;
 static int avg_qdepth = 0;
@@ -36,6 +37,7 @@ int dropcnt = 0;
 int ingressdropcnt = 0;
 int rxpackets = 0;
 uint32_t txqsize = 0;
+static int ingress_drop = 0;
 
 void init_rx_rings()
 {
@@ -160,7 +162,7 @@ int process_pkt(struct rte_mbuf* m, struct lcore_data* lcdata, unsigned queue_id
    handle_packet_begin(tmp_pd, lcdata->conf->state.tables, &(lcdata->conf->state.parser_state), 0, depth, qlatency, current_time, avg_qdepth/1000);
    if (unlikely(GET_INT32_AUTO_PACKET(tmp_pd, HDR(all_metadatas), EGRESS_META_FLD) == EGRESS_DROP_VALUE)) { //tmp_pd->dropped)) {
        debug(" :::: Dropping packet after ingress control\n");
-       //++ingressdropcnt;
+       ++ingress_drop;
        return -1;
     }
     return 0;
@@ -180,7 +182,7 @@ void do_single_rx2(struct lcore_data* lcdata, packet_descriptor_t* pd, unsigned 
         static uint32_t last_t = 0;
         static uint32_t dmax = 0;
         static uint32_t pvalmax = 0;
-        uint32_t qlatency;
+        qlatency;
         int egress_port = 1; //EXTRACT_EGRESSPORT(tmp_pd);
         uint32_t value32 = (uint16_t)1;
         uint32_t tmp_v;
@@ -342,7 +344,7 @@ void do_forward2(LCPARAMS) {
     int tqs;
     uint32_t current_time = rte_get_timer_cycles() * 1000000 / rte_get_timer_hz(); // in us
     static uint32_t last_t = 0;
-    static int ingress_drop = 0;
+    ingress_drop = 0;
     static int queue_drop = 0;
     static int rx_rate = 0;
 
@@ -350,8 +352,10 @@ void do_forward2(LCPARAMS) {
     tqs = rte_ring_count(lcdata->conf->rxring.ring);
     if (tqs>qs) { qs = tqs; }
     if (maxqsbyte<qsize) {maxqsbyte = qsize;}
-    if (current_time > last_t) {
-                                printf("buffer size: %d %d %d %d %u %f %d %d\n", qs, qsize/1000, ingress_drop, queue_drop, avg_qdepth/1000, 1.0*qlatency/1000.0, rx_rate, maxqsbyte/1000 ); //rte_ring_count(lcdata->conf->rxring.ring));
+    if (current_time > last_t && ((qs != 0 && rx_rate != 0) || first_run == 1)) {
+	    first_run = 0;
+	    printf("buffer size:\tqs\tqs/1000\tig_dr\tq_dr\tav_qd/K\tqueue_latency\trx_rate\tmaxqB/k\n");
+                                printf("buffer size:\t%d\t%d\t%d\t%d\t%u\t%f\t%d\t%d\n", qs, qsize/1000, ingress_drop, queue_drop, avg_qdepth/1000, 1.0*qlatency/1000.0, rx_rate, maxqsbyte/1000 ); //rte_ring_count(lcdata->conf->rxring.ring));
                                 fflush(stdout);
                                 if (qs==0) avg_qdepth = 0;
                                 qs = 0;
@@ -374,15 +378,19 @@ void do_forward2(LCPARAMS) {
                 ma[0] = m;
                 if (process_pkt(m, lcdata, queue_idx)==0) {
                         //printf("packet arrived %d\n", m->pkt_len);
-                        rte_spinlock_lock(&spinlock);
-                        ret = rte_ring_sp_enqueue_burst( lcdata->conf->rxring.ring,
-                                                (void **) ma, //lcdata->pkts_burst[pkt_idx],
-                                                1, NULL);
+			if (qs < 8000 /*MAX QSIZE*/) {
+                            rte_spinlock_lock(&spinlock);
+                            ret = rte_ring_sp_enqueue_burst( lcdata->conf->rxring.ring,
+                                                    (void **) ma, //lcdata->pkts_burst[pkt_idx],
+                                                    1, NULL);
+                            rte_spinlock_unlock(&spinlock);
+			}else{
+			    ret = 0;
+			}
                         if (ret) {
                                 qsize += m->pkt_len;
                                 //printf("qsize %d\n", qsize);
                         }
-                        rte_spinlock_unlock(&spinlock);
                         if (!ret) {
                                 rte_pktmbuf_free(m);
                                 ++queue_drop;
@@ -403,6 +411,7 @@ void do_forward2(LCPARAMS) {
 
 void dpdk_main_loop()
 {
+    srand(time(NULL));
     int i;
     uint32_t tmp;
     uint32_t lcore_id = rte_lcore_id();
