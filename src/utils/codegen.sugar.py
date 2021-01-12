@@ -585,6 +585,9 @@ def gen_methodcall(mcall):
 
     # type args are added as a postfix
     name_postfix = "".join(mcall.method.type.typeParameters.parameters.filter('node_type', 'Type_Var').map('urtype.name').map(lambda n: f'__{n}'))
+    if m.path.name == 'random':
+        name_postfix = "".join(mcall.method.type.typeParameters.parameters.filter('node_type', 'Type_Var').map('name').map(lambda n: f'__{n}'))
+
     funname = f'{m.path.name}{name_postfix}'
 
     # TODO make this work well
@@ -1107,7 +1110,13 @@ def gen_format_expr(e, format_as_value=True, expand_parameters=False, needs_vari
         is_local = is_control_local_var(name)
         is_abs = 'is_metadata' not in e.urtype or not e.urtype.is_metadata
         if is_local:
-            #[ local_vars->${name}
+            if 'rand_val' in name:
+                mi = name[9:].split("X")[0]
+                ma = name[9:].split("X")[1]
+                ma = ma.split("_")[0]
+                #[ rand()%((${mi}+1)-${ma}) + ${mi}
+            else:
+                #[ local_vars->${name}
         elif is_abs:
             #[ parameters.${name}
         else:
