@@ -1119,8 +1119,8 @@ def gen_format_expr(e, format_as_value=True, expand_parameters=False, needs_vari
         is_abs = 'is_metadata' not in e.urtype or not e.urtype.is_metadata
         if is_local:
             if 'rand_val' in name:
-                mi = name[9:].split("X")[0]
-                ma = name[9:].split("X")[1]
+                mi = name.split("X")[1]
+                ma = name.split("X")[2]
                 ma = ma.split("_")[0]
                 #[ rand()%((${ma}+1)-${mi}) + ${mi}
             else:
