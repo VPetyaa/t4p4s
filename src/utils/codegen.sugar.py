@@ -3,6 +3,8 @@
 
 from inspect import getmembers, isfunction
 import sys
+import random
+import string
 
 from compiler_log_warnings_errors import addWarning, addError
 from compiler_common import types, with_base, resolve_reference, is_subsequent, groupby, group_references, fldid, fldid2, pp_type_16, make_const, SugarStyle, prepend_statement, append_statement, is_control_local_var, generate_var_name, pre_statement_buffer, post_statement_buffer, enclosing_control, unique_everseen
@@ -366,8 +368,14 @@ def gen_do_assignment(dst, src):
                 #[ dbg_bytes(&($srcexpr), $size, "    : Set " T4LIT(%s,header) "." T4LIT(%s,field) "/" T4LIT(%dB) " = " T4LIT(%s,header) " = ", "$hdrname", "$fldname", $size, "$srctxt");
                 #[ MODIFY_BYTEBUF_BYTEBUF_PACKET(pd, HDR(${hdrname}), FLD(${hdrname},${fldname}), &$tmpvar, $size);
             else:
-                #[ memcpy(&(${format_expr(dst)}), &($srcexpr), $size);
-                #[ dbg_bytes(&($srcexpr), $size, "    : Set " T4LIT(%s,header) "/" T4LIT(%dB) " = " T4LIT(%s,header) " = ", "$dsttxt", $size, "$srctxt");
+                if 'masking' in srcexpr or '+' in srcexpr:
+                    letters = string.ascii_lowercase
+                    result_str = ''.join(random.choice(letters) for i in range(5))
+                    #[ uint32_t rand_var_123_$result_str = ($srcexpr);
+                    #[ memcpy(&(${format_expr(dst)}), &(rand_var_123_$result_str), $size);
+                else:
+                    #[ memcpy(&(${format_expr(dst)}), &($srcexpr), $size);
+                    #[ dbg_bytes(&($srcexpr), $size, "    : Set " T4LIT(%s,header) "/" T4LIT(%dB) " = " T4LIT(%s,header) " = ", "$dsttxt", $size, "$srctxt");
     elif dst.node_type == 'Member':
         tmpvar = generate_var_name('assign_member')
         hdrname = dst.expr.hdr_ref.name
