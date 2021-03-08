@@ -1122,7 +1122,7 @@ def gen_format_expr(e, format_as_value=True, expand_parameters=False, needs_vari
                 mi = name.split("X")[1]
                 ma = name.split("X")[2]
                 ma = ma.split("_")[0]
-                #[ rand()%((${ma}+1)-${mi}) + ${mi}
+                #[ rte_rand()%((${ma}+1)-${mi}) + ${mi}
             else:
                 #[ local_vars->${name}
         elif is_abs:

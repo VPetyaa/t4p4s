@@ -20,7 +20,8 @@ extern void handle_packet_begin(packet_descriptor_t* pd, lookup_table_t** tables
 extern void handle_packet_end(packet_descriptor_t* pd, lookup_table_t** tables, parser_state_t* pstate);
 
 
-#define PD_POOL_SIZE 1024*8
+#define PD_POOL_SIZE 8192
+//1024*8
 //#define LCORE_NUM 4
 //packet_descriptor_t pd_pool[PD_POOL_SIZE];
 //int idx_pd = 0;
@@ -230,7 +231,7 @@ void do_single_rx2(struct lcore_data* lcdata, packet_descriptor_t* pd, unsigned 
                         return;
                 }
                 debug( "DEPTH:: %d %d\n", depth, res32);
-                if ( depth < 40000) { //rte_ring_count(lcdata->conf->rxring.ring) < 500 ) {
+                if ( depth < 4000) { //rte_ring_count(lcdata->conf->rxring.ring) < 500 ) {
                         *(lcdata->conf->rxring.pd_idx) = (*(lcdata->conf->rxring.pd_idx) + 1) % PD_POOL_SIZE;
                         rte_spinlock_lock(&spinlock);
                         ret = rte_ring_sp_enqueue_burst( lcdata->conf->rxring.ring,
@@ -342,7 +343,7 @@ void do_forward2(LCPARAMS) {
     int ret;
     static int qs = 0;
     static int maxqsbyte = 0;
-    int tqs;
+    //int tqs;
     uint32_t current_time = rte_get_timer_cycles() * 1000000 / rte_get_timer_hz(); // in us
     static uint32_t last_t = 0;
     //ingress_drop = 0;
@@ -350,9 +351,9 @@ void do_forward2(LCPARAMS) {
     static int rx_rate = 0;
 
     unsigned queue_count = get_queue_count(lcdata);
-    tqs = rte_ring_count(lcdata->conf->rxring.ring);
-    if (tqs>qs) { qs = tqs; }
-    if (qs <= 0) {qs = 0;}
+    qs = rte_ring_count(lcdata->conf->rxring.ring);
+    //if (tqs>qs) { qs = tqs; }
+    //if (qs <= 0) {qs = 0;}
     if (maxqsbyte<qsize) {maxqsbyte = qsize;}
     if (qsize <= 0) {qsize = 0;}
     if (current_time > last_t){// && ((qs != 0 && rx_rate != 0 && ingress_drop != 0) || first_run == 1)) {
@@ -381,26 +382,23 @@ void do_forward2(LCPARAMS) {
                 ma[0] = m;
                 if (process_pkt(m, lcdata, queue_idx)==0) {
                         //printf("packet arrived %d\n", m->pkt_len);
+                        rte_spinlock_lock(&spinlock);
 			if (qs < 4000 /*MAX QSIZE*/) {
-                            rte_spinlock_lock(&spinlock);
                             ret = rte_ring_sp_enqueue_burst( lcdata->conf->rxring.ring,
                                                     (void **) ma, //lcdata->pkts_burst[pkt_idx],
                                                     1, NULL);
-                            rte_spinlock_unlock(&spinlock);
 			}else{
 			    ret = 0;
+                            rte_pktmbuf_free(m);
+                            ++queue_drop;
+                            //printf("free at buffer size %d\n", rte_ring_count(lcdata->conf->rxring.ring));
 			}
                         if (ret) {
                                 qsize += m->pkt_len;
                                 //printf("qsize %d\n", qsize);
-                        }
-                        if (!ret) {
-                                rte_pktmbuf_free(m);
-                                ++queue_drop;
-                                //printf("free at buffer size %d\n", rte_ring_count(lcdata->conf->rxring.ring));
-                        } else {
                                 avg_qdepth = (1.0-WQ)*avg_qdepth + WQ*qsize;
                         }
+                        rte_spinlock_unlock(&spinlock);
 
                 } else {
                         ++ingress_drop;
@@ -414,7 +412,7 @@ void do_forward2(LCPARAMS) {
 
 void dpdk_main_loop()
 {
-    srand(time(NULL));
+    rte_srand(time(NULL));
     int i;
     uint32_t tmp;
     uint32_t lcore_id = rte_lcore_id();
@@ -443,12 +441,12 @@ void dpdk_main_loop()
     while (core_is_working(LCPARAMS_IN)) {
 	if (lcore_id == 0) {
 //              main_loop_pre_rx(&lcdata);
-                srand(time(NULL));
+                //rte_srand(time(NULL));
                 do_forward2(LCPARAMS_IN);
 //              do_rx(&lcdata, NULL);
         }
         else if (lcore_id == 1) {
-                srand(time(NULL));
+                //rte_srand(time(NULL));
                 main_loop_pre_rx(LCPARAMS_IN);
                 tmp = lcdata->conf->hw.tx_mbufs[1].len;
                 if (tmp>txqsize) txqsize = tmp;
@@ -456,7 +454,7 @@ void dpdk_main_loop()
                         do_single_ring_tx(lcdata,NULL);
                 //}
         } else {
-                srand(time(NULL));
+                //rte_srand(time(NULL));
                 main_loop_pre_rx(LCPARAMS_IN);
                 do_forward(lcdata);
         }

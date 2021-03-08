@@ -685,7 +685,9 @@ project(
     'c',
     version : '1.0.0',
     default_options : [
-        'warning_level=0'
+        'warning_level=0',
+        'optimization=3',
+        'buildtype=release'
     ],
 )
 EOT
