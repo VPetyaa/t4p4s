@@ -24,6 +24,7 @@
 void set_handle_packet_metadata(packet_descriptor_t* pd, uint32_t portid);
 
 
+//typedef int enum_CloneType_t;
 typedef enum_CounterType_t T4P4S_COUNTER_e;
 typedef enum_MeterType_t T4P4S_METER_e;
 

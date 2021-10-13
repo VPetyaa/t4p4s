@@ -119,7 +119,7 @@ for idx, ctl in enumerate(hlir.controls):
 
 #[ void handle_packet(uint32_t portid, int pkt_idx, STDPARAMS)
 #{ {
-#[     reset_headers(SHORT_STDPARAMS_IN);
+#[     //reset_headers(SHORT_STDPARAMS_IN);
 #[     set_handle_packet_metadata(pd, portid);
 #[
 #[     dbg_bytes(pd->data, packet_size(pd), "Handling packet " T4LIT(#%03d) " (port " T4LIT(%d,port) ", $${}{%02dB}): ", pkt_idx, get_ingress_port(pd), packet_size(pd));

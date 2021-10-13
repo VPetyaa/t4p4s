@@ -158,9 +158,10 @@ struct lcore_data init_lcore_data() {
         .prev_tsc  = 0,
 
         .conf     = &lcore_conf[rte_lcore_id()],
-        .mempool  = pktmbuf_pool[get_socketid(rte_lcore_id())], // TODO: Check for MULTI-SOCKET CASE !!!!
+        .mempool  = pktmbuf_pool[0],//pktmbuf_pool[get_socketid(rte_lcore_id())], // TODO: Check for MULTI-SOCKET CASE !!!!
+        //.mempool  = pktmbuf_pool[get_socketid(rte_lcore_id())], // TODO: Check for MULTI-SOCKET CASE !!!!
 
-        .is_valid  = lcdata.conf->hw.n_rx_queue != 0,
+        .is_valid  = true, // lcdata.conf->hw.n_rx_queue != 0,
     };
     lcdata.conf->mempool  = pktmbuf_pool[0]; // pktmbuf_pool[rte_lcore_id()] + get_socketid(rte_lcore_id());
     #if ASYNC_MODE != ASYNC_MODE_OFF

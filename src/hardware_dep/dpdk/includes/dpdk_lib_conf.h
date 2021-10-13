@@ -101,6 +101,15 @@ struct lcore_hardware_conf {
 #endif
 #include <setjmp.h>
 
+struct lcore_ring {
+    struct rte_ring *ring;
+    uint32_t pkt_count;
+    uint32_t byte_count;
+    packet_descriptor_t* pd_pool; //[PD_POOL_SIZE];
+    uint32_t* pd_idx;
+};
+
+
 struct lcore_conf {
     struct lcore_hardware_conf hw;
     struct lcore_state         state;
@@ -111,6 +120,9 @@ struct lcore_conf {
     unsigned                   pending_crypto;
     struct rte_ring    *fake_crypto_rx;
     struct rte_ring    *fake_crypto_tx;
+
+    struct lcore_ring*         txring;
+    struct lcore_ring          rxring;
 
     occurence_counter_t async_drop_counter;
     occurence_counter_t fwd_packet;

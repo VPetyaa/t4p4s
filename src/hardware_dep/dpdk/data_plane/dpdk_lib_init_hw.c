@@ -13,7 +13,7 @@ struct lcore_conf lcore_conf[RTE_MAX_LCORE];
 uint32_t enabled_port_mask;
 
 // NUMA is enabled by default.
-int numa_on = 1;
+int numa_on = 0;
 
 
 uint16_t            nb_lcore_params;
@@ -167,6 +167,51 @@ void init_mbuf_pool_exit(int socketid) {
     rte_exit(EXIT_FAILURE, "Cannot init mbuf pool on socket %d: seemingly impossible error (code %d)\n", socketid, errno);
 }
 
+int init_lcore_rings()
+{
+    unsigned socket_io;
+    struct rte_ring *ring = NULL;
+    printf("nb_lcore: %d\n", nb_lcore_params);
+    for (uint16_t i = 0; i < nb_lcore_params; ++i) {
+        uint8_t lcore = lcore_params[i].lcore_id;
+        printf("lcore_rings_init -- %d\n",lcore);
+        socket_io = rte_lcore_to_socket_id(lcore);
+        if (nb_lcore_params==2 && lcore==0) {
+                printf("NB LCORE: %d\n", nb_lcore_params);
+                if (ring==NULL)
+                     ring = rte_ring_create("test", 1024*16, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                lcore_conf[lcore].rxring.ring = ring;
+                //rte_atomic32_init( &(lcore_conf[lcore].rxring.pkt_count) );
+                //rte_atomic32_init( &(lcore_conf[lcore].rxring.byte_count) );
+                lcore_conf[lcore].rxring.pkt_count = 0;
+                lcore_conf[lcore].rxring.byte_count = 0;
+                lcore_conf[lcore].rxring.pd_idx = 0;
+                lcore_conf[1].txring = &(lcore_conf[0].rxring);
+        } else if (nb_lcore_params==4) {
+                if (lcore==0) ring = rte_ring_create("test0", 1024, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                if (lcore==2) ring = rte_ring_create("test2", 1024, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                if (lcore%2==0) {
+                        lcore_conf[lcore].rxring.ring = ring;
+                        //rte_atomic32_init( &(lcore_conf[lcore].rxring.pkt_count) );
+                        //rte_atomic32_init( &(lcore_conf[lcore].rxring.byte_count) );
+                        lcore_conf[lcore].rxring.pkt_count = 0;
+                        lcore_conf[lcore].rxring.byte_count = 0;
+                        lcore_conf[lcore].rxring.pd_idx = 0;
+                } else {
+                        lcore_conf[lcore].rxring.ring = 0;
+                }
+                if (lcore%2==1) {
+                        lcore_conf[lcore].txring = &(lcore_conf[lcore-1].rxring);
+                } else {
+                        lcore_conf[lcore].txring = 0;
+                }
+        }
+
+    }
+    return 0;
+}
+
+
 void init_mbuf_pool(int socketid)
 {
     if (pktmbuf_pool[socketid] != NULL) return;
@@ -175,13 +220,14 @@ void init_mbuf_pool(int socketid)
 
     char s[64];
     snprintf(s, sizeof(s), "mbuf_pool_%d", socketid);
-    pktmbuf_pool[socketid] =
+    pktmbuf_pool[socketid] = rte_pktmbuf_pool_create( s, NB_MBUF, MEMPOOL_CACHE_SIZE, 0, MBUF_SIZE, socketid);
+    /*pktmbuf_pool[socketid] =
         rte_mempool_create(s, NB_MBUF, MBUF_SIZE, MEMPOOL_CACHE_SIZE,
             sizeof(struct rte_pktmbuf_pool_private),
             rte_pktmbuf_pool_init, NULL,
             rte_pktmbuf_init, NULL,
             socketid, 0);
-
+*/
     if (pktmbuf_pool[socketid] == NULL) {
         init_mbuf_pool_exit(socketid);
     }
@@ -202,7 +248,7 @@ bool init_tx_on_lcore(unsigned lcore_id, uint8_t portid, uint16_t queueid)
 
     uint8_t socketid = get_socketid(lcore_id);
 
-    debug("txq=%u,%d,%d\n", lcore_id, queueid, socketid);
+    printf("txq=%u,%d,%d\n", lcore_id, queueid, socketid);
     fflush(stdout);
 
     struct rte_eth_dev_info dev_info;
@@ -361,4 +407,5 @@ void dpdk_init_nic()
     }
 
     print_all_ports_link_status(nb_ports, enabled_port_mask);
+    init_lcore_rings();
 }
