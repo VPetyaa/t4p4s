@@ -34,36 +34,6 @@ uint16_t t4p4s_nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 #endif
 
 struct rte_eth_conf port_conf = {
-#ifndef T4P4S_VETH_MODE
-    .rxmode = {
-        .mq_mode = ETH_MQ_RX_RSS,
-        .max_rx_pkt_len = RTE_ETH_MAX_LEN,
-        .split_hdr_size = 0,
-#if RTE_VERSION >= RTE_VERSION_NUM(18,11,0,0)
-	#ifndef T4P4S_RTE_OFFLOADS
-	#define T4P4S_RTE_OFFLOADS DEV_RX_OFFLOAD_CHECKSUM
-	#endif
-        .offloads = T4P4S_RTE_OFFLOADS,
-#elif RTE_VERSION >= RTE_VERSION_NUM(18,05,0,0)
-        .offloads = DEV_RX_OFFLOAD_CRC_STRIP | DEV_RX_OFFLOAD_CHECKSUM,
-#else
-        .header_split   = 0, // Header Split disabled
-        .hw_ip_checksum = 1, // IP checksum offload enabled
-        .hw_vlan_filter = 0, // VLAN filtering disabled
-        .jumbo_frame    = 0, // Jumbo Frame Support disabled
-        .hw_strip_crc   = 1, // CRC stripped by hardware
-#endif
-    },
-    .rx_adv_conf = {
-        .rss_conf = {
-            .rss_key = NULL,
-            .rss_hf = T4P4S_RTE_RSS_HF,
-        },
-    },
-    .txmode = {
-        .mq_mode = ETH_MQ_TX_NONE,
-    },
-#endif
 };
 
 //=============================================================================
@@ -167,6 +137,51 @@ void init_mbuf_pool_exit(int socketid) {
     rte_exit(EXIT_FAILURE, "Cannot init mbuf pool on socket %d: seemingly impossible error (code %d)\n", socketid, errno);
 }
 
+int init_lcore_rings()
+{
+    unsigned socket_io;
+    struct rte_ring *ring = NULL;
+    printf("nb_lcore: %d\n", nb_lcore_params);
+    for (uint16_t i = 0; i < nb_lcore_params; ++i) {
+        uint8_t lcore = lcore_params[i].lcore_id;
+        printf("lcore_rings_init -- %d\n",lcore);
+        socket_io = rte_lcore_to_socket_id(lcore);
+        if (nb_lcore_params==2 && lcore==0) {
+                printf("NB LCORE: %d\n", nb_lcore_params);
+                if (ring==NULL)
+                     ring = rte_ring_create("test", 1024*16, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                lcore_conf[lcore].rxring.ring = ring;
+                //rte_atomic32_init( &(lcore_conf[lcore].rxring.pkt_count) );
+                //rte_atomic32_init( &(lcore_conf[lcore].rxring.byte_count) );
+                lcore_conf[lcore].rxring.pkt_count = 0;
+                lcore_conf[lcore].rxring.byte_count = 0;
+                lcore_conf[lcore].rxring.pd_idx = 0;
+                lcore_conf[1].txring = &(lcore_conf[0].rxring);
+        } else if (nb_lcore_params==4) {
+                if (lcore==0) ring = rte_ring_create("test0", 1024, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                if (lcore==2) ring = rte_ring_create("test2", 1024, socket_io, RING_F_SP_ENQ | RING_F_SC_DEQ);
+                if (lcore%2==0) {
+                        lcore_conf[lcore].rxring.ring = ring;
+                        //rte_atomic32_init( &(lcore_conf[lcore].rxring.pkt_count) );
+                        //rte_atomic32_init( &(lcore_conf[lcore].rxring.byte_count) );
+                        lcore_conf[lcore].rxring.pkt_count = 0;
+                        lcore_conf[lcore].rxring.byte_count = 0;
+                        lcore_conf[lcore].rxring.pd_idx = 0;
+                } else {
+                        lcore_conf[lcore].rxring.ring = 0;
+                }
+                if (lcore%2==1) {
+                        lcore_conf[lcore].txring = &(lcore_conf[lcore-1].rxring);
+                } else {
+                        lcore_conf[lcore].txring = 0;
+                }
+        }
+
+    }
+    return 0;
+}
+
+
 void init_mbuf_pool(int socketid)
 {
     if (pktmbuf_pool[socketid] != NULL) return;
@@ -214,6 +229,26 @@ bool init_tx_on_lcore(unsigned lcore_id, uint8_t portid, uint16_t queueid)
         rte_exit(EXIT_FAILURE, "rte_eth_tx_queue_setup: err=%d, "
                  "port=%d\n", ret, portid);
 
+/*    if (portid==1) {
+        ret = 0; //rte_eth_set_queue_rate_limit(portid, queueid, 5000);
+	if (ret < 0) {
+		switch (ret) {
+			case EIO: printf("EIO\n");
+				  break;
+			case ENOTSUP: printf("ENOTSUP\n");
+                                  break;
+			case ENODEV: printf("ENODEV\n");
+                                  break;
+			case EINVAL: printf("EINVAL\n");
+                                  break;
+			default: printf("UNK\n");
+                                  break;
+		}
+	        rte_exit(EXIT_FAILURE, "rte_eth_set_queue_rate_limit: err=%d, "
+                 "port=%d\n", ret, portid);
+ 	}
+    }*/
+
     struct lcore_conf* qconf = &lcore_conf[lcore_id];
     qconf->hw.tx_queue_id[portid] = queueid;
     return true;
@@ -230,11 +265,13 @@ void dpdk_init_port(uint8_t nb_ports, uint32_t nb_lcores, uint8_t portid) {
     fflush(stdout);
 
     uint16_t nb_rx_queue = get_port_n_rx_queues(portid);
+
 //    #ifdef T4P4S_VETH_MODE
 //    uint32_t n_tx_queue = 1;
 //    #else
     uint32_t n_tx_queue = min(nb_lcores, MAX_TX_QUEUE_PER_PORT);
 //    #endif
+
     debug(" :::: Creating queues: nb_rxq=%d nb_txq=%u\n",
           nb_rx_queue, (unsigned)n_tx_queue );
     int ret = rte_eth_dev_configure(portid, nb_rx_queue,
@@ -247,6 +284,7 @@ void dpdk_init_port(uint8_t nb_ports, uint32_t nb_lcores, uint8_t portid) {
     print_port_mac((unsigned)portid, ports_eth_addr[portid].addr_bytes);
 
     uint16_t queueid = 0;
+
 //    #ifdef T4P4S_VETH_MODE
 //        init_tx_on_lcore(0, portid, queueid);
 //    #else
@@ -255,6 +293,7 @@ void dpdk_init_port(uint8_t nb_ports, uint32_t nb_lcores, uint8_t portid) {
                 ++queueid;
         }
 //    #endif
+
 
     debug("\n");
 }
@@ -358,7 +397,33 @@ void dpdk_init_nic()
 
         debug("Entering promiscous mode on port %d\n", portid);
         rte_eth_promiscuous_enable(portid);
+
+/*	if (portid==1) {
+		uint16_t queueid = 0;
+    		for (unsigned lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++, queueid++) {
+        		ret = rte_eth_set_queue_rate_limit(portid, queueid, 5000);
+		        if (ret < 0) {
+                		switch (ret) {
+		                        case EIO: printf("EIO\n");
+                		                  break;
+		                        case ENOTSUP: printf("ENOTSUP\n");
+                		                  break;
+		                        case ENODEV: printf("ENODEV\n");
+                		                  break;
+		                        case EINVAL: printf("EINVAL\n");
+                		                  break;
+		                        default: printf("UNK\n");
+                		                  break;
+                		}
+		                rte_exit(EXIT_FAILURE, "rte_eth_set_queue_rate_limit: err=%d, "
+                			 "port=%d\n", ret, portid);
+        		}
+
+    		}
+	}*/
+
     }
 
     print_all_ports_link_status(nb_ports, enabled_port_mask);
+    init_lcore_rings();
 }

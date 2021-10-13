@@ -112,6 +112,43 @@ for idx, ctl in enumerate(hlir.controls):
         #[     // update_packet(STDPARAMS_IN); // we need to update the packet prior to calculating the new checksum
 #} }
 
+#[ void process_packet_begin(STDPARAMS)
+#{ {
+it=0
+for ctl in hlir.controls:
+    if len(ctl.body.components) == 0:
+        #[ // skipping empty control ${ctl.name}
+    else:
+        #[ control_${ctl.name}(STDPARAMS_IN);
+
+    if hlir.news.model == 'V1Switch' and it==1:
+        #[ transfer_to_egress(pd);
+    it = it+1
+    if ctl.name == 'egress':
+        break;
+#} }
+
+#[ void process_packet_end(STDPARAMS)
+#{ {
+it=0
+after_egress = False
+for ctl in hlir.controls:
+    if len(ctl.body.components) == 0:
+        #[ // skipping empty control ${ctl.name}
+    else:
+        #[ control_${ctl.name}(STDPARAMS_IN);
+
+    if hlir.news.model == 'V1Switch' and it==1:
+        #[ transfer_to_egress(pd);
+    it = it+1
+    if ctl.name == 'egress':
+        after_egress = True
+    if after_egress:
+        if ctl.name == 'egress':
+            #[ update_packet(pd); // we need to update the packet prior to calculating the new checksum        
+#} }
+
+
 ################################################################################
 
 #[ extern void deparse_packet(STDPARAMS);
@@ -119,6 +156,7 @@ for idx, ctl in enumerate(hlir.controls):
 
 #[ void handle_packet(uint32_t portid, int pkt_idx, STDPARAMS)
 #{ {
+
 #[     reset_headers(SHORT_STDPARAMS_IN);
 #[     set_handle_packet_metadata(pd, portid);
 #[
@@ -134,4 +172,4 @@ for idx, ctl in enumerate(hlir.controls):
 #[
 #[     deparse_packet(STDPARAMS_IN);
 #} }
-#[
+

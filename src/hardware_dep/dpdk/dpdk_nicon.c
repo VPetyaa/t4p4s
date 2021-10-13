@@ -129,6 +129,7 @@ static void dpdk_send_packet(struct rte_mbuf *mbuf, uint8_t port, uint32_t lcore
         queue_length = 0;
     }
 
+    debug("    :: SENDING DPDK PACKETS - port:%d\n", port);
     conf->hw.tx_mbufs[port].len = queue_length;
 }
 

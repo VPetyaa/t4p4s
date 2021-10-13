@@ -3,6 +3,8 @@
 
 from inspect import getmembers, isfunction
 import sys
+import random
+import string
 
 from itertools import takewhile
 
@@ -386,17 +388,7 @@ def gen_do_assignment(dst, src, ctl=None):
                 #[ dbg_bytes(&($srcexpr), $size, "    : Set " T4LIT($hdrname,header) "." T4LIT($fldname,field) "/" T4LIT(${size}B) " = " $srctxt " = ");
                 #[ MODIFY(dst_pkt(pd), FLD($hdrname,$fldname), src_buf(&$tmpvar, $size), ENDIAN_NET);
             else:
-                needs_dereferencing = src.node_type in ("Constant", "Member") and size <= 4
-                deref = "*" if needs_dereferencing else ""
-                #[ ${format_type(dst.type)} $tmpvar = $deref(${format_type(dst.type)}$deref)((${format_expr(src, expand_parameters=True, needs_variable=True)}));
 
-                needs_referencing = src.node_type in ("Constant", "Member", "MethodCallExpression") and size <= 4
-                ref = f'&' if needs_referencing else f''
-                #[ memcpy(&(${format_expr(dst)}), $ref$tmpvar, $size);
-
-                dstname = dst.path.name
-                short_name = ctl.locals.get(dstname, 'Declaration_Variable').short_name
-                #[ dbg_bytes(&(${format_expr(dst)}), $size, "    : Set " T4LIT(${short_name},field) "/" T4LIT(${size}B) " = " $srctxt " = ");
     elif dst.node_type == 'Member':
         tmpvar = generate_var_name('assign_member')
         hdrname = dst.expr.hdr_ref.name
@@ -744,23 +736,6 @@ def is_ref(node):
 def gen_methodcall(mcall):
     m = mcall.method
 
-    def format_with_ref(e):
-        ut = e.urtype
-        if ut.node_type in ('Type_List'):
-            return 'uint8_buffer_t'
-        if ut.node_type in ('Type_Header'):
-            return 'bitfield_handle_t' if not ut.is_metadata else None
-        ref = "*" if is_ref(e) else ""
-        return f'{format_type(e.type)}{ref}'
-
-    mname, _parinfos, _ret, partypenames = get_mcall_infos(mcall)
-    partype_suffix = ''.join(f'__{partypename}' for partypename in partypenames)
-    funname = f'{mname}{partype_suffix}'
-
-    # TODO clone operations are not supported currently,
-    #      but the call should be generated to an implementation with an empty body
-    if mname.startswith('clone'):
-        return
 
     #[ ${format_expr(mcall, funname_override=funname)};
 
@@ -867,6 +842,7 @@ def gen_fmt_Cast(e, format_as_value=True, expand_parameters=False, needs_variabl
         #Cast from bool to bit<1>
         return f'({fe} ? 1 : 0)'
     elif et.node_type == 'Type_Bits' and edt.node_type == 'Type_Bits':
+
         if et.isSigned == edt.isSigned:
             if not et.isSigned:                       #Cast from bit<w> to bit<v>
                 if et.size > edt.size:
@@ -1546,6 +1522,7 @@ def gen_format_expr(e, format_as_value=True, expand_parameters=False, needs_vari
         name = e.path.name
         is_local = is_control_local_var(name, e)
         is_abs = 'is_metadata' not in e.urtype or not e.urtype.is_metadata
+
         if 'action_ref' in e:
             #[ action_${e.action_ref.name}
         elif is_local:
@@ -1553,6 +1530,7 @@ def gen_format_expr(e, format_as_value=True, expand_parameters=False, needs_vari
                 #[ &(local_vars->$name)
             else:
                 #[ local_vars->$name
+
         elif is_abs:
             #[ parameters.$name
         else:
