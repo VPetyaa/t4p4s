@@ -136,7 +136,7 @@ for table in hlir.tables:
                     #[     memcpy(key, &((control_locals_${table.control.name}_t*) pd->control_locals)->${locname}, ${byte_width});
 
                     #{     #ifdef T4P4S_DEBUG
-                    #[         *key_txt_idx += sprintf(key_txt + *key_txt_idx, T4LIT(${short_name},field) "/" T4LIT(%db) "=" T4COLOR(T4LIGHT_bytes), $key.size);
+                    #[         *key_txt_idx += sprintf(key_txt + *key_txt_idx, T4LIT(${short_name},field) "/" T4LIT(%db) "=" T4COLOR(T4LIGHT_bytes), ${key.size});
                     #[         *key_txt_idx += dbg_sprint_bytes_limit(key_txt + *key_txt_idx, key, ${byte_width}, ${field_size_print_limit}, "_");
                     #[         *key_txt_idx += sprintf(key_txt + *key_txt_idx, T4COLOR(T4LIGHT_off) " ");
                     #}     #endif
