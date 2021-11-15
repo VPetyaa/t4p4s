@@ -11,7 +11,6 @@ from hlir16.hlir_utils import align8_16_32
 #[ #include "dpdk_lib_byteorder.h"
 
 
-
 # TODO this is too low level
 
 #[ extern int FLD_BYTEOFFSET(header_descriptor_t hdesc, field_instance_e fld);
@@ -57,7 +56,6 @@ for table in hlir.tables:
             #[     if (is_invalid(pd, HDR(${hi_name}), "${hi_name}", "${key.field_name}"))    return;
 
             fld = key.header.urtype.fields.get(key.field_name)
-
             size = key.size
             byte_width = (size+7)//8
             if size <= 32:
@@ -138,7 +136,7 @@ for table in hlir.tables:
                     #[     memcpy(key, &((control_locals_${table.control.name}_t*) pd->control_locals)->${locname}, ${byte_width});
 
                     #{     #ifdef T4P4S_DEBUG
-                    #[         *key_txt_idx += sprintf(key_txt + *key_txt_idx, T4LIT(${short_name},field) "/" T4LIT(%db) "=" T4COLOR(T4LIGHT_bytes), $size);
+                    #[         *key_txt_idx += sprintf(key_txt + *key_txt_idx, T4LIT(${short_name},field) "/" T4LIT(%db) "=" T4COLOR(T4LIGHT_bytes), $key.size);
                     #[         *key_txt_idx += dbg_sprint_bytes_limit(key_txt + *key_txt_idx, key, ${byte_width}, ${field_size_print_limit}, "_");
                     #[         *key_txt_idx += sprintf(key_txt + *key_txt_idx, T4COLOR(T4LIGHT_off) " ");
                     #}     #endif

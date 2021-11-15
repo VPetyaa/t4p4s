@@ -304,6 +304,8 @@ def format_source(src):
     if nt == 'Cast':
         if is_binop(src.expr):
             return format_binop(src.expr)
+        if src.expr.node_type == 'Cast':
+            return format_source(src.expr)
         return f'T4LIT({src.expr.path.name},field)'
     if nt == 'Mux':
         return f'"("{format_source(src.e0)} " ? " {format_source(src.e1)} " : " {format_source(src.e2)} ")"'
