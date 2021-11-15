@@ -8,6 +8,9 @@ from more_itertools import unique_everseen
 #[ #include "dpdk_lib.h"
 #[ #include "util_debug.h"
 
+#[ void random_impl(uint32_t*, uint32_t, uint32_t, SHORT_STDPARAMS);
+#[ void mark_to_drop_impl(SHORT_STDPARAMS);
+
 def by_partypename(callinfo):
     mname, parinfos, ret, partypenames = callinfo
     return (mname, partypenames)
@@ -62,7 +65,7 @@ for mname, parinfos, ret, partypenames in callinfos:
     rettype = 'void'
 
     params = ', '.join([argtype for parname, pardir, partype, (partypename, ctype, argtype, argvalue) in parinfos if argvalue != None] + ['SHORT_STDPARAMS'])
-    #[     $rettype ${mname}_impl($params);
+    #[     //$rettype ${mname}_impl($params);
 
 #[
 
@@ -79,14 +82,19 @@ for mname, parinfos, ret, partypenames in callinfos:
 
     arginfos = [(pardir, argtype, argvalue) for parname, pardir, partype, (partypename, ctype, argtype, argvalue) in parinfos if argvalue != None]
     refvars = [generate_var_name(f'extern_arg{idx}') if pardir in ('out', 'inout') else None for idx, (pardir, argtype, argvalue) in enumerate(arginfos)]
+    out_var = None
+    ref_var = None
     for refvar, (pardir, argtype, argvalue) in zip(refvars, arginfos):
         if refvar is not None:
             # TODO this generates an extra pointer (at least in some cases), get rid of it
-
-            #[     $argtype $refvar = ($argtype)$argvalue;
+            out_var = argvalue;
+            ref_var = refvar;
+            #[     uint32_t $refvar = 0; // ($argtype)$argvalue;
 
     args = ', '.join([f'&{refvar}' if refvar is not None else argvalue for refvar, (pardir, argtype, argvalue) in zip(refvars, arginfos)] + ['SHORT_STDPARAMS_IN'])
     #[     ${mname}_impl($args);
+    if out_var is not None:
+        #[     *$out_var = $ref_var;
 
     #} }
     #[
