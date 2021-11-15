@@ -7,6 +7,7 @@ declare -A exitcode
 declare -A skips
 declare -A skipped
 declare -A testcases
+declare -A models
 declare -A dirname
 declare -A src_p4
 declare -A ext_p4
@@ -19,6 +20,7 @@ success_count=0
 failure_count=0
 
 START_DIR=${START_DIR-examples}
+HTML_REPORT=${HTML_REPORT-no}
 START_DIR=`realpath "${START_DIR}"`
 SKIP_FILE=${SKIP_FILE-tests_to_skip.txt}
 
@@ -55,7 +57,10 @@ for file in `find -L "${START_DIR}" -name "test-*.c"`; do
 
     [ $found -eq 0 ] && echo "P4 file for $file not found" && continue
 
-    for testcase in `cat $file | grep "&t4p4s_testcase_" | sed -e "s/[\"],.*//g" | sed -e "s/.*[\"]//g"`; do
+    for testcase_row in `cat $file | grep "&t4p4s_testcase_" | sed -e "s/[[:blank:]]//g" | sed -e "s/[{}\"]//g"`; do
+        testcase=`echo $testcase_row | cut -f1 -d,`
+        model=`echo $testcase_row | cut -f3 -d,`
+
         PREPART="$PREFIX"
         if [ -z ${POSTFIX+x} ]; then
             TESTPART="${p4file}=${testcase}"
@@ -67,6 +72,7 @@ for file in `find -L "${START_DIR}" -name "test-*.c"`; do
         testcases["$testid"]="$testid"
         p4files["$testid"]="$p4file"
         src_p4["$testid"]="$SRC_P4"
+        models["$testid"]=$model
         ext="${SRC_P4##*.}"
         ext_p4["$testid"]="$ext"
 
@@ -107,7 +113,11 @@ if [ "$PRECOMPILE" == "yes" ]; then
         [ "${ext_p4[$TESTCASE]}" == "p4_14" ] && P4VSN=14
         [ "${ext_p4[$TESTCASE]}" == "p4"    ] && P4VSN=16
 
-        $P4C/build/p4test "${src_p4[$TESTCASE]}" --toJSON ${TARGET_JSON} --p4v $P4VSN --Wdisable=unused --ndebug && \
+        model_compile_argument=""
+        [ "${models[$TESTCASE]}" == "v1model" ] && model_compile_argument="-D__TARGET_V1__"
+        [ "${models[$TESTCASE]}" == "psa" ] && model_compile_argument="-D__TARGET_PSA__"
+
+        $P4C/build/p4test "${src_p4[$TESTCASE]}" --toJSON ${TARGET_JSON} --p4v $P4VSN --Wdisable=unused --ndebug $model_compile_argument && \
             gzip ${TARGET_JSON} && \
             mv ${TARGET_JSON}.gz ${TARGET_JSON} && \
             echo -n "|"  &
@@ -131,6 +141,7 @@ summary_only_echo() {
 
 LOG_DIR=build/all-run-logs
 SUMMARY_FILE=${LOG_DIR}/$(date +"%Y%m%d_%H%M%S")_log.txt
+REPORT_OUTPUT_FILE=${LOG_DIR}/$(date +"%Y%m%d_%H%M%S")_output
 LAST_SUMMARY_FILE=${LOG_DIR}/last_log.txt
 mkdir -p ${LOG_DIR}
 rm -f ${LOG_DIR}/*.result.txt
@@ -167,26 +178,50 @@ done
 
 echo Will run ${total_count} cases and skip ${#skipped[@]} cases
 
-
 current_idx=1
 
+if [ ${HTML_REPORT} == "yes" ]; then
+  COLLECTOR_PATH="examples/test_scripts/data_collector/data_collector.py"
+  actual_commit_hash=`git rev-parse HEAD`
+  python3 ${COLLECTOR_PATH} new $REPORT_OUTPUT_FILE json,html commitHash=$actual_commit_hash
+fi
 for TESTCASE in ${sorted_testcases[@]}; do
     [ "${skipped[$TESTCASE]+x}" ] && continue
 
+    all_arguments="$TESTCASE ${models[$TESTCASE]:+model=${models[$TESTCASE]}} $*"
     echo
     echo
-    echo Running test case ${current_idx}/${total_count}: ./t4p4s.sh $* $TESTCASE
-    ./t4p4s.sh $TESTCASE $*
-    exitcode["$TESTCASE"]="$?"
+    echo Running test case ${current_idx}/${total_count}: ./t4p4s.sh $all_arguments
 
+    if [ ${HTML_REPORT} == "yes" ]; then
+        tmpFilename="/tmp/t4p4s_run_result"
+        set -o pipefail
+        ./t4p4s.sh $all_arguments|tee "${tmpFilename}_pure_output"
+        exitcode["$TESTCASE"]="$?"
+        set +o pipefail
+
+        echo ${current_idx} > $tmpFilename
+        echo $TESTCASE >> $tmpFilename
+        echo ${exitcode["$TESTCASE"]} >> $tmpFilename
+        cat "${tmpFilename}_pure_output" >> $tmpFilename
+
+        python3 ${COLLECTOR_PATH} add $REPORT_OUTPUT_FILE json,html $tmpFilename
+    else
+        ./t4p4s.sh $all_arguments
+        exitcode["$TESTCASE"]="$?"
+    fi
     ((++current_idx))
 
     [ ${exitcode["$TESTCASE"]} -eq 0 ] && ((++success_count))
     [ ${exitcode["$TESTCASE"]} -ne 0 ] && ((++failure_count))
 
     # if there is an interrupt, finish executing test cases
-    [ ${exitcode["$TESTCASE"]} -eq 254 ] && break 2
+    [ ${exitcode["$TESTCASE"]} -eq 254 ] && break
 done
+
+if [ ${HTML_REPORT} == "yes" ]; then
+  python3 ${COLLECTOR_PATH} end $REPORT_OUTPUT_FILE json,html
+fi
 
 resultcode=0
 
