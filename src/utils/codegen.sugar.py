@@ -407,6 +407,7 @@ def gen_do_assignment(dst, src, ctl=None):
 
                 needs_referencing = src.node_type in ("Constant", "Member", "MethodCallExpression") and size <= 4
                 ref = f'&' if needs_referencing else f''
+                if tmpvar.startswith('assignment'): ref = f'&'
                 #[ memcpy(&(${format_expr(dst)}), $ref$tmpvar, $size);
 
                 dstname = dst.path.name
