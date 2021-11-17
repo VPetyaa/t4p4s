@@ -26,7 +26,7 @@ CFLAGS += $(P4_GCC_OPTS)
 endif
 
 
-all: dpdk_dummy_controller dpdk_portfwd_controller dpdk_l2fwd_controller dpdk_psa_l2fwd_controller dpdk_l3fwd_controller dpdk_smgw_controller dpdk_red_controller dpdk_sred_controller
+all: dpdk_dummy_controller dpdk_portfwd_controller dpdk_l2fwd_controller dpdk_psa_l2fwd_controller dpdk_l3fwd_controller dpdk_smgw_controller dpdk_red_controller dpdk_sred_controller dpdk_ped_controller
 
 controllers_common: handlers.c controller.c messages.c sock_helpers.c threadpool.c fifo.c dpdk_ctrl_common.c dpdk_controller_dictionary.c
 	@$(CC) $(CFLAGS) $(LIB) handlers.c controller.c messages.c sock_helpers.c threadpool.c fifo.c dpdk_ctrl_common.c dpdk_controller_dictionary.c -c
@@ -62,7 +62,10 @@ dpdk_red_controller: controllers_common dpdk_red_controller.c
 dpdk_sred_controller: controllers_common dpdk_sred_controller.c
 	@$(CC) $(CFLAGS) $(LIB) dpdk_ctrl.o dpdk_sred_controller.c -o dpdk_sred_controller -lm
 
+dpdk_ped_controller: controllers_common dpdk_ped_controller.c
+	@$(CC) $(CFLAGS) $(LIB) dpdk_ctrl.o dpdk_ped_controller.c -o dpdk_ped_controller -lm
+
 clean:
 	rm -f handlers.o controller.o messages.o sock_helpers.o threadpool.o fifo.o \
 	      dpdk_ctrl_common.o dpdk_ctrl_common.o dpdk_ctrl.o dpdk_controller_dictionary.o \
-	      dpdk_dummy_controller dpdk_portfwd_controller dpdk_l2fwd_controller dpdk_psa_l2fwd_controller dpdk_test-digest_controller dpdk_l3fwd_controller dpdk_l3-routing-full_controller dpdk_smgw_controller dpdk_sred_controller dpdk_red_controller
+	      dpdk_dummy_controller dpdk_portfwd_controller dpdk_l2fwd_controller dpdk_psa_l2fwd_controller dpdk_test-digest_controller dpdk_l3fwd_controller dpdk_l3-routing-full_controller dpdk_smgw_controller dpdk_sred_controller dpdk_red_controller dpdk_ped_controller
